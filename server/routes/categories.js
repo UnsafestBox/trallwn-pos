@@ -2,10 +2,9 @@ const express = require('express')
 const db = require('../db')
 const router = express.Router()
 
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM categories ORDER BY sort_order, name').all()
-  res.json(rows)
-})
+function listHandler(_req, res) {
+  res.json(db.prepare('SELECT * FROM categories ORDER BY sort_order, name').all())
+}
 
 router.post('/', (req, res) => {
   const { name, sort_order = 99 } = req.body
@@ -30,4 +29,4 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true })
 })
 
-module.exports = router
+module.exports = { listHandler, router }

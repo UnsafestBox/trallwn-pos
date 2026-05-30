@@ -3,11 +3,11 @@ const db = require('../db')
 const router = express.Router()
 
 const log = db.prepare(
-  'INSERT INTO events (type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  'INSERT INTO events (type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 )
 
-function logEvent({ type, tab_id = null, tab_name = null, product_name = null, quantity = null, amount_pence = null, payment_method = null, note = null }) {
-  log.run(type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note)
+function logEvent({ type, tab_id = null, tab_name = null, product_name = null, quantity = null, amount_pence = null, payment_method = null, note = null, user_id = null, user_name = null }) {
+  log.run(type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note, user_id, user_name)
 }
 
 router.get('/', (req, res) => {
@@ -35,7 +35,7 @@ router.post('/', (req, res) => {
   const { name } = req.body
   if (!name) return res.status(400).json({ error: 'name required' })
   const info = db.prepare("INSERT INTO tabs (name) VALUES (?)").run(name)
-  logEvent({ type: 'tab_opened', tab_id: info.lastInsertRowid, tab_name: name })
+  logEvent({ type: 'tab_opened', tab_id: info.lastInsertRowid, tab_name: name, user_id: req.user.id, user_name: req.user.name })
   res.status(201).json({ id: info.lastInsertRowid, name, status: 'open' })
 })
 
@@ -64,6 +64,8 @@ router.post('/:id/items', (req, res) => {
     quantity,
     amount_pence: unit_price * quantity,
     note: memberPriceApplied ? 'member price' : null,
+    user_id: req.user.id,
+    user_name: req.user.name,
   })
 
   res.status(201).json({ id: info.lastInsertRowid })
@@ -109,6 +111,8 @@ router.delete('/:id/items/:itemId', (req, res) => {
     product_name: item.product_name,
     quantity: item.quantity,
     amount_pence: item.unit_price_pence * item.quantity,
+    user_id: req.user.id,
+    user_name: req.user.name,
   })
 
   res.json({ ok: true })
@@ -135,6 +139,8 @@ router.put('/:id/close', (req, res) => {
     tab_name: tab.name,
     amount_pence: total.total,
     payment_method,
+    user_id: req.user.id,
+    user_name: req.user.name,
   })
 
   res.json({ ok: true })
@@ -152,8 +158,7 @@ router.delete('/:id', (req, res) => {
   const restoreStock = db.prepare('UPDATE products SET stock_qty = stock_qty + ? WHERE id = ?')
   items.forEach(i => { if (i.product_id) restoreStock.run(i.quantity, i.product_id) })
 
-  // Log before deleting — then nullify the FK so the tab row can be removed
-  logEvent({ type: 'tab_voided', tab_id: tab.id, tab_name: tab.name, amount_pence: total.total })
+  logEvent({ type: 'tab_voided', tab_id: tab.id, tab_name: tab.name, amount_pence: total.total, user_id: req.user.id, user_name: req.user.name })
   db.prepare('DELETE FROM tab_items WHERE tab_id = ?').run(req.params.id)
   db.prepare('UPDATE events SET tab_id = NULL WHERE tab_id = ?').run(req.params.id)
   db.prepare('DELETE FROM tabs WHERE id = ?').run(req.params.id)

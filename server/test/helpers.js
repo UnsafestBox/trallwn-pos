@@ -7,13 +7,17 @@ const db = require('../db')
 
 let server
 let baseUrl
+let token = null
 
 async function startServer() {
   await new Promise(resolve => {
     server = http.createServer(app)
-    server.listen(0, resolve) // port 0 = random free port
+    server.listen(0, resolve)
   })
   baseUrl = `http://localhost:${server.address().port}`
+  // Log in as the seeded Admin user
+  const res = await post('/api/auth/login', { name: 'Admin', pin: '0000' })
+  token = res.body.token
 }
 
 async function stopServer() {
@@ -30,7 +34,7 @@ function clearDb() {
     DELETE FROM sqlite_sequence
       WHERE name IN ('tab_items','events','tabs','products','categories');
   `)
-  // Re-seed default categories
+  // Re-seed categories (users + sessions kept so the token stays valid)
   const ins = db.prepare('INSERT INTO categories (name, sort_order) VALUES (?, ?)')
   ;[['Draught', 1], ['Bottles', 2], ['Spirits', 3], ['Soft Drinks', 4], ['Food', 5]]
     .forEach(([name, order]) => ins.run(name, order))
@@ -39,7 +43,10 @@ function clearDb() {
 async function req(method, path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   const data = await res.json()

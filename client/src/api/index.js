@@ -1,16 +1,40 @@
 const BASE = '/api'
 
+function getToken() {
+  return localStorage.getItem('pos_token')
+}
+
 async function req(method, path, body) {
+  const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
+  if (res.status === 401) {
+    localStorage.removeItem('pos_token')
+    window.dispatchEvent(new Event('pos:unauthorized'))
+    throw new Error('Unauthorized')
+  }
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
 export const api = {
+  // Auth
+  getLoginUsers: () => req('GET', '/auth/users'),
+  login: (name, pin) => req('POST', '/auth/login', { name, pin }),
+  logout: () => req('POST', '/auth/logout'),
+  me: () => req('GET', '/auth/me'),
+
+  // Users (super only)
+  getUsers: () => req('GET', '/users'),
+  createUser: (data) => req('POST', '/users', data),
+  updateUser: (id, data) => req('PUT', `/users/${id}`, data),
+
   // Categories
   getCategories: () => req('GET', '/categories'),
   createCategory: (data) => req('POST', '/categories', data),

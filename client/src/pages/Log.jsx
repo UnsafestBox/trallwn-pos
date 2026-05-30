@@ -115,12 +115,17 @@ export default function Log() {
 
                   {/* Description */}
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
                       <span style={{ color: meta.color, fontSize: '0.8rem', fontWeight: 700 }}>
                         {meta.icon} {meta.label}
                       </span>
                       {ev.tab_name && (
                         <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>· {ev.tab_name}</span>
+                      )}
+                      {ev.user_name && (
+                        <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginLeft: 'auto' }}>
+                          {ev.user_name}
+                        </span>
                       )}
                     </div>
                     {ev.product_name && (

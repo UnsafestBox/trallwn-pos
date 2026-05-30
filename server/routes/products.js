@@ -2,7 +2,7 @@ const express = require('express')
 const db = require('../db')
 const router = express.Router()
 
-router.get('/', (_req, res) => {
+function listHandler(_req, res) {
   const rows = db.prepare(`
     SELECT p.*, c.name as category_name
     FROM products p
@@ -11,7 +11,7 @@ router.get('/', (_req, res) => {
     ORDER BY c.sort_order, p.name
   `).all()
   res.json(rows)
-})
+}
 
 router.post('/', (req, res) => {
   const { name, category_id, price_pence, member_price_pence = null, stock_qty = 0, min_stock = 0 } = req.body
@@ -34,7 +34,6 @@ router.put('/:id', (req, res) => {
   if (stock_qty !== undefined)    db.prepare('UPDATE products SET stock_qty = ? WHERE id = ?').run(stock_qty, id)
   if (min_stock !== undefined)    db.prepare('UPDATE products SET min_stock = ? WHERE id = ?').run(min_stock, id)
   if (active !== undefined)       db.prepare('UPDATE products SET active = ? WHERE id = ?').run(active, id)
-  // member_price_pence is always present in a full edit (null means "clear it")
   if ('member_price_pence' in req.body) {
     db.prepare('UPDATE products SET member_price_pence = ? WHERE id = ?').run(req.body.member_price_pence, id)
   }
@@ -47,4 +46,4 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true })
 })
 
-module.exports = router
+module.exports = { listHandler, router }

@@ -167,6 +167,57 @@ label { font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom
 
 .empty-state { color: var(--text-dim); font-size: 0.875rem; padding: 20px; text-align: center; }
 
+/* Login screen */
+.login-screen {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+.login-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 36px 32px; width: 340px; text-align: center;
+}
+.login-brand { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 28px; }
+.login-prompt { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 16px; }
+.login-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 20px; }
+.login-back {
+  background: none; border: none; cursor: pointer; color: var(--text-dim);
+  font-size: 0.85rem; margin-bottom: 16px; display: block;
+}
+.login-back:hover { color: var(--text); }
+.login-error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
+
+.user-list { display: flex; flex-direction: column; gap: 8px; }
+.user-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); font-size: 1rem; font-weight: 600; padding: 14px;
+  cursor: pointer; transition: all .15s;
+}
+.user-btn:hover { border-color: var(--accent); background: rgba(245,158,11,.08); }
+
+.pin-dots {
+  display: flex; justify-content: center; gap: 12px; margin-bottom: 24px;
+}
+.pin-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border); background: transparent; transition: all .1s;
+}
+.pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+
+.pin-pad {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.pin-key {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); font-size: 1.3rem; font-weight: 600; padding: 16px 0;
+  cursor: pointer; transition: all .1s;
+}
+.pin-key:hover:not(:disabled) { background: var(--border); }
+.pin-key:active:not(:disabled) { transform: scale(.95); }
+.pin-key:disabled { opacity: .4; cursor: not-allowed; }
+.pin-key-action { color: var(--text-dim); font-size: 1.1rem; }
+.pin-key-confirm { background: var(--success); color: #fff; border-color: var(--success); }
+.pin-key-confirm:hover:not(:disabled) { opacity: .85; background: var(--success); }
+
 @media (max-width: 768px) {
   .pos-layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   .pos-menu { border-right: none; border-bottom: 1px solid var(--border); }

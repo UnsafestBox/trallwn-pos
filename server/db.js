@@ -1,5 +1,6 @@
 const { DatabaseSync } = require('node:sqlite')
 const path = require('path')
+const { hashPin } = require('./lib/crypto')
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'pos.db')
 const db = new DatabaseSync(dbPath)
@@ -8,6 +9,20 @@ if (dbPath !== ':memory:') db.exec('PRAGMA journal_mode = WAL')
 db.exec('PRAGMA foreign_keys = ON')
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    pin_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'normal',
+    active INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -57,16 +72,25 @@ db.exec(`
   );
 `)
 
-// Migrations for columns added after initial release
+// Migrations
 try { db.exec('ALTER TABLE products ADD COLUMN member_price_pence INTEGER') } catch {}
 try { db.exec('ALTER TABLE tab_items ADD COLUMN is_member INTEGER NOT NULL DEFAULT 0') } catch {}
+try { db.exec('ALTER TABLE events ADD COLUMN user_id INTEGER REFERENCES users(id)') } catch {}
+try { db.exec('ALTER TABLE events ADD COLUMN user_name TEXT') } catch {}
 
+// Seed categories
 const catCount = db.prepare('SELECT COUNT(*) as n FROM categories').get()
 if (catCount.n === 0) {
-  const insertCat = db.prepare('INSERT INTO categories (name, sort_order) VALUES (?, ?)')
-  ;[['Draught', 1], ['Bottles', 2], ['Spirits', 3], ['Soft Drinks', 4], ['Food', 5]].forEach(
-    ([name, order]) => insertCat.run(name, order)
-  )
+  const ins = db.prepare('INSERT INTO categories (name, sort_order) VALUES (?, ?)')
+  ;[['Draught', 1], ['Bottles', 2], ['Spirits', 3], ['Soft Drinks', 4], ['Food', 5]]
+    .forEach(([name, order]) => ins.run(name, order))
+}
+
+// Seed default super user
+const userCount = db.prepare('SELECT COUNT(*) as n FROM users').get()
+if (userCount.n === 0) {
+  db.prepare("INSERT INTO users (name, pin_hash, role) VALUES ('Admin', ?, 'super')")
+    .run(hashPin('0000'))
 }
 
 module.exports = db
