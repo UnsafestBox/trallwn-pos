@@ -180,6 +180,8 @@ Edit `config.json` at the project root. Changes take effect after restarting the
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `theme` | `"dark"` | UI theme: `"dark"` (amber, dark), `"light"` (bright environments), `"slate"` (indigo, cool dark), `"dyslexic"` (cream bg, Atkinson Hyperlegible font, wider spacing) |
+| `port` | `3001` | Port the API server listens on. The install script generates a random high port (40000–60000) and writes it here |
+| `apiPrefix` | `"/api"` | URL prefix for all API routes. The install script generates a random 8-character path (e.g. `/xk9m2p4`) and bakes it into the client build |
 | `auth.requirePin` | `true` | Set to `false` to let users log in by name only — no PIN pad shown |
 | `auth.inactivityTimeoutMinutes` | `3` | Minutes of inactivity before auto sign-out. Set to `0` to disable |
 | `auth.inactivityWarningSecs` | `30` | Seconds of warning shown before auto sign-out triggers |

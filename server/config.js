@@ -5,6 +5,8 @@ const configPath = process.env.CONFIG_PATH || path.join(__dirname, '..', 'config
 
 const defaults = {
   theme: 'dark',
+  port: 3001,
+  apiPrefix: '/api',
   auth: {
     requirePin: true,
     inactivityTimeoutMinutes: 3,
@@ -23,7 +25,7 @@ const defaults = {
 function mergeDeep(base, overrides) {
   const result = { ...base }
   for (const key of Object.keys(base)) {
-    if (overrides && overrides[key] !== undefined) {
+    if (overrides != null && overrides[key] != null) {
       result[key] = (typeof base[key] === 'object' && base[key] !== null)
         ? mergeDeep(base[key], overrides[key])
         : overrides[key]
