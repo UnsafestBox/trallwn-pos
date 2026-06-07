@@ -98,13 +98,36 @@ if ! command -v git &>/dev/null; then
 fi
 info "git $(git --version | awk '{print $3}')"
 
-# ── 3. Clone or update ────────────────────────────────────────────────────────
+# ── 3. Copy or update files ───────────────────────────────────────────────────
 section "3. Application files"
-if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Repo already present — pulling latest..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -f "$SCRIPT_DIR/server/index.js" && -f "$SCRIPT_DIR/client/vite.config.js" ]]; then
+  # Running from within the source directory — copy files locally, no GitHub needed
+  if ! command -v rsync &>/dev/null; then
+    apt-get install -y -qq rsync
+  fi
+  info "Copying from local source ($SCRIPT_DIR)..."
+  mkdir -p "$INSTALL_DIR"
+  rsync -a \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='client/dist' \
+    --exclude='client/.env' \
+    --exclude='server/pos.db' \
+    --exclude='server/pos.db-shm' \
+    --exclude='server/pos.db-wal' \
+    "$SCRIPT_DIR/" "$INSTALL_DIR/"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+  info "Files copied"
+elif [[ -d "$INSTALL_DIR/.git" ]]; then
+  # Already installed from GitHub — pull latest
+  info "Pulling latest from GitHub..."
   sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" pull
 else
-  info "Cloning into $INSTALL_DIR..."
+  # No local source found — clone from GitHub
+  info "Cloning from GitHub..."
   sudo -u "$SERVICE_USER" git clone "$REPO_URL" "$INSTALL_DIR"
 fi
 
