@@ -4,3 +4,5 @@ server/pos.db-wal
 server/pos.db-shm
 dist/
 .env
+config.json
+.claude/
