@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api/index.js'
+import { useConfig } from '../context/ConfigContext.jsx'
 
 function fmt(pence) { return `£${(pence / 100).toFixed(2)}` }
 
-const EMPTY_FORM = { name: '', category_id: '', price: '', member_price: '', stock: '', min_stock: '' }
+const EMPTY_FORM = { name: '', category_id: '', price: '', member_price: '', stock: '', min_stock: '', off_book: false }
 
 function productToForm(p) {
   return {
@@ -13,6 +14,7 @@ function productToForm(p) {
     member_price: p.member_price_pence != null ? (p.member_price_pence / 100).toFixed(2) : '',
     stock: String(p.stock_qty),
     min_stock: String(p.min_stock),
+    off_book: !!p.off_book,
   }
 }
 
@@ -24,10 +26,12 @@ function formToPayload(form) {
     member_price_pence: form.member_price !== '' ? Math.round(parseFloat(form.member_price) * 100) : null,
     stock_qty: parseFloat(form.stock) || 0,
     min_stock: parseFloat(form.min_stock) || 0,
+    off_book: form.off_book,
   }
 }
 
 export default function Stock() {
+  const { features } = useConfig()
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
   const [showAddProduct, setShowAddProduct] = useState(false)
@@ -128,9 +132,10 @@ export default function Stock() {
                   <tr>
                     <th>Name</th>
                     <th>Price</th>
-                    <th>Member price</th>
+                    {features.memberPricing && <th>Member price</th>}
                     <th>Stock</th>
                     <th>Min stock</th>
+                    {features.offBook && <th>Off book</th>}
                     <th></th>
                   </tr>
                 </thead>
@@ -139,9 +144,11 @@ export default function Stock() {
                     <tr key={p.id}>
                       <td>{p.name}</td>
                       <td>{fmt(p.price_pence)}</td>
-                      <td style={{ color: p.member_price_pence != null ? 'var(--success)' : 'var(--text-dim)' }}>
-                        {p.member_price_pence != null ? fmt(p.member_price_pence) : '—'}
-                      </td>
+                      {features.memberPricing && (
+                        <td style={{ color: p.member_price_pence != null ? 'var(--success)' : 'var(--text-dim)' }}>
+                          {p.member_price_pence != null ? fmt(p.member_price_pence) : '—'}
+                        </td>
+                      )}
                       <td>
                         {editingStock[p.id] !== undefined ? (
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -168,6 +175,11 @@ export default function Stock() {
                         )}
                       </td>
                       <td style={{ color: 'var(--text-dim)' }}>{p.min_stock}</td>
+                      {features.offBook && (
+                        <td>
+                          {p.off_book ? <span className="badge badge-warn">Open Cash</span> : <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>—</span>}
+                        </td>
+                      )}
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Edit</button>
@@ -204,7 +216,7 @@ export default function Stock() {
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: features.memberPricing ? '1fr 1fr' : '1fr', gap: 10 }}>
               <div className="field">
                 <label>Price (£)</label>
                 <input
@@ -214,15 +226,17 @@ export default function Stock() {
                   placeholder="3.50"
                 />
               </div>
-              <div className="field">
-                <label>Member price (£) <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>optional</span></label>
-                <input
-                  type="number" step="0.01"
-                  value={form.member_price}
-                  onChange={e => setForm(f => ({ ...f, member_price: e.target.value }))}
-                  placeholder="3.00"
-                />
-              </div>
+              {features.memberPricing && (
+                <div className="field">
+                  <label>Member price (£) <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>optional</span></label>
+                  <input
+                    type="number" step="0.01"
+                    value={form.member_price}
+                    onChange={e => setForm(f => ({ ...f, member_price: e.target.value }))}
+                    placeholder="3.00"
+                  />
+                </div>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="field">
@@ -244,6 +258,21 @@ export default function Stock() {
                 />
               </div>
             </div>
+            {features.offBook && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+                <input
+                  type="checkbox"
+                  id="off_book"
+                  checked={form.off_book}
+                  onChange={e => setForm(f => ({ ...f, off_book: e.target.checked }))}
+                  style={{ width: 16, height: 16, flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                <label htmlFor="off_book" style={{ cursor: 'pointer', userSelect: 'none', margin: 0 }}>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>Off the book</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Logs and bills show this as "Open Cash"</div>
+                </label>
+              </div>
+            )}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={closeForm}>Cancel</button>
               <button className="btn btn-primary" onClick={saveProduct} disabled={!formValid}>

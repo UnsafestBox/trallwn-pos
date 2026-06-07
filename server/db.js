@@ -77,6 +77,8 @@ try { db.exec('ALTER TABLE products ADD COLUMN member_price_pence INTEGER') } ca
 try { db.exec('ALTER TABLE tab_items ADD COLUMN is_member INTEGER NOT NULL DEFAULT 0') } catch {}
 try { db.exec('ALTER TABLE events ADD COLUMN user_id INTEGER REFERENCES users(id)') } catch {}
 try { db.exec('ALTER TABLE events ADD COLUMN user_name TEXT') } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))") } catch {}
+try { db.exec('ALTER TABLE products ADD COLUMN off_book INTEGER NOT NULL DEFAULT 0') } catch {}
 
 // Seed categories
 const catCount = db.prepare('SELECT COUNT(*) as n FROM categories').get()

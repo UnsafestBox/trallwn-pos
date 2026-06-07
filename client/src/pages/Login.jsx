@@ -1,23 +1,51 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useConfig } from '../context/ConfigContext.jsx'
 
 export default function Login() {
   const { login } = useAuth()
+  const config = useConfig()
+  const requirePin = config.auth.requirePin !== false
+
   const [users, setUsers] = useState([])
+  const [loadError, setLoadError] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    api.getLoginUsers().then(setUsers).catch(() => {})
+    api.getLoginUsers()
+      .then(setUsers)
+      .catch(() => setLoadError('Could not reach server. Is it running on port 3001?'))
   }, [])
 
-  function selectUser(u) {
-    setSelectedUser(u)
-    setPin('')
+  async function doLogin(name, pinValue, pinMode = false) {
+    setLoading(true)
     setError('')
+    try {
+      await login(name, pinValue)
+    } catch {
+      if (pinMode) {
+        setError('Incorrect PIN')
+        setPin('')
+      } else {
+        setError('Login failed')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function selectUser(u) {
+    if (!requirePin) {
+      doLogin(u.name, '')
+    } else {
+      setSelectedUser(u)
+      setPin('')
+      setError('')
+    }
   }
 
   function pressDigit(d) {
@@ -33,16 +61,7 @@ export default function Login() {
 
   async function submit() {
     if (!selectedUser || pin.length === 0) return
-    setLoading(true)
-    setError('')
-    try {
-      await login(selectedUser.name, pin)
-    } catch {
-      setError('Incorrect PIN')
-      setPin('')
-    } finally {
-      setLoading(false)
-    }
+    await doLogin(selectedUser.name, pin, true)
   }
 
   return (
@@ -53,12 +72,17 @@ export default function Login() {
         {!selectedUser ? (
           <>
             <div className="login-prompt">Who are you?</div>
+            {loadError && <div className="login-error">{loadError}</div>}
+            {error && <div className="login-error">{error}</div>}
             <div className="user-list">
               {users.map(u => (
-                <button key={u.id} className="user-btn" onClick={() => selectUser(u)}>
+                <button key={u.id} className="user-btn" onClick={() => selectUser(u)} disabled={loading}>
                   {u.name}
                 </button>
               ))}
+              {!loadError && users.length === 0 && (
+                <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '12px 0' }}>Loading…</div>
+              )}
             </div>
           </>
         ) : (

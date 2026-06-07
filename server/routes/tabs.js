@@ -1,25 +1,35 @@
 const express = require('express')
 const db = require('../db')
+const { logEvent } = require('../lib/logEvent')
 const router = express.Router()
-
-const log = db.prepare(
-  'INSERT INTO events (type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-)
-
-function logEvent({ type, tab_id = null, tab_name = null, product_name = null, quantity = null, amount_pence = null, payment_method = null, note = null, user_id = null, user_name = null }) {
-  log.run(type, tab_id, tab_name, product_name, quantity, amount_pence, payment_method, note, user_id, user_name)
-}
 
 router.get('/', (req, res) => {
   const status = req.query.status || 'open'
+  const date  = req.query.date
+  const limit = Math.min(Number(req.query.limit) || 200, 500)
+
+  const conditions = ['t.status = ?']
+  const params = [status]
+
+  if (date) {
+    conditions.push("date(t.closed_at) = ?")
+    params.push(date)
+  }
+
+  params.push(limit)
+
   const tabs = db.prepare(`
-    SELECT t.*, COALESCE(SUM(ti.unit_price_pence * ti.quantity), 0) as total_pence
+    SELECT t.*,
+      COALESCE(SUM(ti.unit_price_pence * ti.quantity), 0) as total_pence,
+      se.user_name as settled_by
     FROM tabs t
     LEFT JOIN tab_items ti ON ti.tab_id = t.id
-    WHERE t.status = ?
+    LEFT JOIN events se ON se.tab_id = t.id AND se.type = 'tab_settled'
+    WHERE ${conditions.join(' AND ')}
     GROUP BY t.id
-    ORDER BY t.opened_at DESC
-  `).all(status)
+    ORDER BY t.closed_at DESC, t.opened_at DESC
+    LIMIT ?
+  `).all(...params)
   res.json(tabs)
 })
 
@@ -49,21 +59,48 @@ router.post('/:id/items', (req, res) => {
 
   const memberPriceApplied = is_member && product.member_price_pence != null
   const unit_price = memberPriceApplied ? product.member_price_pence : product.price_pence
+  const stored_name = product.off_book ? 'Open Cash' : product.name
 
   db.prepare('UPDATE products SET stock_qty = stock_qty - ? WHERE id = ?').run(quantity, product_id)
 
   const info = db.prepare(
     'INSERT INTO tab_items (tab_id, product_id, product_name, unit_price_pence, quantity, is_member) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(req.params.id, product_id, product.name, unit_price, quantity, memberPriceApplied ? 1 : 0)
+  ).run(req.params.id, product_id, stored_name, unit_price, quantity, memberPriceApplied ? 1 : 0)
 
   logEvent({
     type: 'item_added',
     tab_id: tab.id,
     tab_name: tab.name,
-    product_name: product.name,
+    product_name: stored_name,
     quantity,
     amount_pence: unit_price * quantity,
     note: memberPriceApplied ? 'member price' : null,
+    user_id: req.user.id,
+    user_name: req.user.name,
+  })
+
+  res.status(201).json({ id: info.lastInsertRowid })
+})
+
+router.post('/:id/manual', (req, res) => {
+  const { amount_pence } = req.body
+  if (!amount_pence || amount_pence <= 0) return res.status(400).json({ error: 'amount_pence must be positive' })
+
+  const tab = db.prepare('SELECT * FROM tabs WHERE id = ? AND status = ?').get(req.params.id, 'open')
+  if (!tab) return res.status(404).json({ error: 'Open tab not found' })
+
+  const info = db.prepare(
+    'INSERT INTO tab_items (tab_id, product_id, product_name, unit_price_pence, quantity, is_member) VALUES (?, NULL, ?, ?, 1, 0)'
+  ).run(req.params.id, 'Open Cash', amount_pence)
+
+  logEvent({
+    type: 'item_added',
+    tab_id: tab.id,
+    tab_name: tab.name,
+    product_name: 'Open Cash',
+    quantity: 1,
+    amount_pence,
+    note: 'manual amount',
     user_id: req.user.id,
     user_name: req.user.name,
   })

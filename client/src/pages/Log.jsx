@@ -15,11 +15,15 @@ function fmtDate(isoStr) {
 }
 
 const TYPE_META = {
-  tab_opened:  { label: 'Tab opened',   color: 'var(--info)',    icon: '📂' },
-  item_added:  { label: 'Item added',   color: 'var(--text)',    icon: '➕' },
-  item_removed:{ label: 'Item removed', color: 'var(--text-dim)',icon: '➖' },
-  tab_settled: { label: 'Tab settled',  color: 'var(--success)', icon: '✅' },
-  tab_voided:  { label: 'Tab voided',   color: 'var(--danger)',  icon: '🗑️' },
+  tab_opened:    { label: 'Tab opened',    color: 'var(--info)',     icon: '📂' },
+  item_added:    { label: 'Item added',    color: 'var(--text)',     icon: '➕' },
+  item_removed:  { label: 'Item removed',  color: 'var(--text-dim)', icon: '➖' },
+  tab_settled:   { label: 'Tab settled',   color: 'var(--success)',  icon: '✅' },
+  tab_voided:    { label: 'Tab voided',    color: 'var(--danger)',   icon: '🗑️' },
+  login_success: { label: 'Login',         color: 'var(--success)',  icon: '🔓' },
+  login_failed:  { label: 'Failed login',  color: 'var(--danger)',   icon: '🔒' },
+  user_created:  { label: 'User created',  color: 'var(--info)',     icon: '👤' },
+  user_updated:  { label: 'User updated',  color: 'var(--text-dim)', icon: '✏️' },
 }
 
 const ALL_TYPES = Object.keys(TYPE_META)
@@ -137,7 +141,9 @@ export default function Log() {
                       </div>
                     )}
                     {ev.note && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: 2 }}>{ev.note}</div>
+                      <div style={{ fontSize: '0.8rem', color: ev.type === 'login_failed' ? 'var(--danger)' : 'var(--text-dim)', marginTop: 2 }}>
+                        {ev.type === 'login_failed' ? `Attempted: ${ev.note}` : ev.note}
+                      </div>
                     )}
                   </div>
 

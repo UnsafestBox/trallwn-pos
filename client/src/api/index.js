@@ -24,6 +24,9 @@ async function req(method, path, body) {
 }
 
 export const api = {
+  // Config
+  getConfig: () => req('GET', '/config'),
+
   // Auth
   getLoginUsers: () => req('GET', '/auth/users'),
   login: (name, pin) => req('POST', '/auth/login', { name, pin }),
@@ -47,10 +50,16 @@ export const api = {
   deleteProduct: (id) => req('DELETE', `/products/${id}`),
 
   // Tabs
-  getTabs: (status = 'open') => req('GET', `/tabs?status=${status}`),
+  getTabs: (status = 'open', { date, limit } = {}) => {
+    const p = new URLSearchParams({ status })
+    if (date)  p.set('date', date)
+    if (limit) p.set('limit', limit)
+    return req('GET', `/tabs?${p}`)
+  },
   getTab: (id) => req('GET', `/tabs/${id}`),
   createTab: (name) => req('POST', '/tabs', { name }),
   addItem: (tabId, product_id, quantity = 1, is_member = false) => req('POST', `/tabs/${tabId}/items`, { product_id, quantity, is_member }),
+  addManualToTab: (tabId, amount_pence) => req('POST', `/tabs/${tabId}/manual`, { amount_pence }),
   removeItem: (tabId, itemId) => req('DELETE', `/tabs/${tabId}/items/${itemId}`),
   closeTab: (tabId, payment_method) => req('PUT', `/tabs/${tabId}/close`, { payment_method }),
   repriceTab: (tabId, is_member) => req('PUT', `/tabs/${tabId}/reprice`, { is_member }),

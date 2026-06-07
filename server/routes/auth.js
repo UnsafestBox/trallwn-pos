@@ -2,6 +2,8 @@ const express = require('express')
 const db = require('../db')
 const { hashPin, randomToken } = require('../lib/crypto')
 const { requireAuth } = require('../middleware/auth')
+const { logEvent } = require('../lib/logEvent')
+const config = require('../config')
 const router = express.Router()
 
 // Public — list active users by name for the login screen
@@ -10,18 +12,28 @@ router.get('/users', (_req, res) => {
   res.json(users)
 })
 
-// Public — verify PIN and create session
+// Public — verify PIN (if required) and create session
 router.post('/login', (req, res) => {
   const { name, pin } = req.body
-  if (!name || !pin) return res.status(400).json({ error: 'name and pin required' })
+  if (!name) return res.status(400).json({ error: 'name required' })
 
   const user = db.prepare('SELECT * FROM users WHERE name = ? AND active = 1').get(name)
-  if (!user || user.pin_hash !== hashPin(pin)) {
+  if (!user) {
+    logEvent({ type: 'login_failed', note: name })
     return res.status(401).json({ error: 'Incorrect name or PIN' })
+  }
+
+  if (config.auth.requirePin) {
+    if (!pin) return res.status(400).json({ error: 'pin required' })
+    if (user.pin_hash !== hashPin(pin)) {
+      logEvent({ type: 'login_failed', note: name })
+      return res.status(401).json({ error: 'Incorrect name or PIN' })
+    }
   }
 
   const token = randomToken()
   db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, user.id)
+  logEvent({ type: 'login_success', user_id: user.id, user_name: user.name })
 
   res.json({ token, user: { id: user.id, name: user.name, role: user.role } })
 })

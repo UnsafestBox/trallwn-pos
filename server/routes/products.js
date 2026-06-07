@@ -14,13 +14,13 @@ function listHandler(_req, res) {
 }
 
 router.post('/', (req, res) => {
-  const { name, category_id, price_pence, member_price_pence = null, stock_qty = 0, min_stock = 0 } = req.body
+  const { name, category_id, price_pence, member_price_pence = null, stock_qty = 0, min_stock = 0, off_book = 0 } = req.body
   if (!name || !category_id || price_pence == null) {
     return res.status(400).json({ error: 'name, category_id, price_pence required' })
   }
   const info = db.prepare(
-    'INSERT INTO products (name, category_id, price_pence, member_price_pence, stock_qty, min_stock) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(name, category_id, price_pence, member_price_pence, stock_qty, min_stock)
+    'INSERT INTO products (name, category_id, price_pence, member_price_pence, stock_qty, min_stock, off_book) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(name, category_id, price_pence, member_price_pence, stock_qty, min_stock, off_book ? 1 : 0)
   res.status(201).json({ id: info.lastInsertRowid })
 })
 
@@ -36,6 +36,9 @@ router.put('/:id', (req, res) => {
   if (active !== undefined)       db.prepare('UPDATE products SET active = ? WHERE id = ?').run(active, id)
   if ('member_price_pence' in req.body) {
     db.prepare('UPDATE products SET member_price_pence = ? WHERE id = ?').run(req.body.member_price_pence, id)
+  }
+  if ('off_book' in req.body) {
+    db.prepare('UPDATE products SET off_book = ? WHERE id = ?').run(req.body.off_book ? 1 : 0, id)
   }
 
   res.json({ ok: true })

@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react'
 import { api } from '../api/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
+function fmtDateTime(isoStr) {
+  if (!isoStr) return '—'
+  const d = new Date(isoStr + 'Z')
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return `${date}, ${time}`
+}
+
 const EMPTY_FORM = { name: '', pin: '', confirmPin: '', role: 'normal' }
 
 export default function Users() {
@@ -80,7 +88,7 @@ export default function Users() {
       <div className="card" style={{ overflow: 'hidden' }}>
         <table className="stock-table">
           <thead>
-            <tr><th>Name</th><th>Role</th><th>Status</th><th></th></tr>
+            <tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr>
           </thead>
           <tbody>
             {users.map(u => (
@@ -101,6 +109,9 @@ export default function Users() {
                   <span className={`badge ${u.active ? 'badge-success' : 'badge-danger'}`}>
                     {u.active ? 'Active' : 'Inactive'}
                   </span>
+                </td>
+                <td style={{ color: 'var(--text-dim)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                  {fmtDateTime(u.created_at)}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>

@@ -1,26 +1,53 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api/index.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import { useConfig } from '../context/ConfigContext.jsx'
 
 function fmt(pence) {
   return `£${(pence / 100).toFixed(2)}`
 }
 
-let nextId = 1
+// Quick sale items live only in state until settled — persisted to localStorage per user
+function useQuickSale(userId) {
+  const key = userId ? `pos_basket_${userId}` : null
 
-// Quick sale items live only in state until settled — no tab created until payment
-function useQuickSale() {
-  const [items, setItems] = useState([])
+  const [items, setItems] = useState(() => {
+    if (!key) return []
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || '[]')
+      return saved
+    } catch { return [] }
+  })
+
+  // Sync to localStorage on every change
+  useEffect(() => {
+    if (!key) return
+    localStorage.setItem(key, JSON.stringify(items))
+  }, [items, key])
 
   function addItem(product, isMember = false) {
     const price = (isMember && product.member_price_pence != null)
       ? product.member_price_pence
       : product.price_pence
     setItems(prev => [...prev, {
-      _id: nextId++,
+      _id: Date.now() + Math.random(),
       product_id: product.id,
-      product_name: product.name,
+      product_name: product.off_book ? 'Open Cash' : product.name,
       unit_price_pence: price,
       is_member: isMember && product.member_price_pence != null,
+      is_manual: false,
+      quantity: 1,
+    }])
+  }
+
+  function addManual(amount_pence) {
+    setItems(prev => [...prev, {
+      _id: Date.now() + Math.random(),
+      product_id: null,
+      product_name: 'Open Cash',
+      unit_price_pence: amount_pence,
+      is_member: false,
+      is_manual: true,
       quantity: 1,
     }])
   }
@@ -43,14 +70,19 @@ function useQuickSale() {
     }))
   }
 
-  function clear() { setItems([]) }
+  function clear() {
+    setItems([])
+    if (key) localStorage.removeItem(key)
+  }
 
   const total = items.reduce((s, i) => s + i.unit_price_pence, 0)
 
-  return { items, addItem, removeItem, reprice, clear, total }
+  return { items, addItem, addManual, removeItem, reprice, clear, total }
 }
 
 export default function POS() {
+  const { user } = useAuth()
+  const { features } = useConfig()
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
   const [activeCat, setActiveCat] = useState(null)
@@ -68,9 +100,14 @@ export default function POS() {
   const [showClose, setShowClose] = useState(false)
   const [payMethod, setPayMethod] = useState('card')
   const [settling, setSettling] = useState(false)
+  const [settleError, setSettleError] = useState('')
   const [isMember, setIsMember] = useState(false)
 
-  const qs = useQuickSale()
+  // Manual amount entry
+  const [showManual, setShowManual] = useState(false)
+  const [manualInput, setManualInput] = useState('')
+
+  const qs = useQuickSale(user?.id)
 
   const loadBase = useCallback(async () => {
     const [cats, prods, openTabs] = await Promise.all([
@@ -128,6 +165,29 @@ export default function POS() {
     setActiveTabId(t.id)
   }
 
+  async function addManualToTab(amount_pence) {
+    if (!activeTabId) { setShowNewTab(true); return }
+    await api.addManualToTab(activeTabId, amount_pence)
+    await Promise.all([loadTab(activeTabId), loadBase()])
+  }
+
+  function openManual() {
+    setManualInput('')
+    setShowManual(true)
+  }
+
+  function confirmManual() {
+    const pence = Math.round(parseFloat(manualInput) * 100)
+    if (!pence || pence <= 0) return
+    if (mode === 'quick') {
+      qs.addManual(pence)
+    } else {
+      addManualToTab(pence)
+    }
+    setShowManual(false)
+    setManualInput('')
+  }
+
   async function voidTab() {
     if (!confirm('Void this tab and restore stock?')) return
     await api.deleteTab(activeTabId)
@@ -140,13 +200,18 @@ export default function POS() {
 
   async function settle() {
     setSettling(true)
+    setSettleError('')
     try {
       if (mode === 'quick') {
         const now = new Date()
         const label = `Quick Sale ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
         const tab = await api.createTab(label)
         for (const item of qs.items) {
-          await api.addItem(tab.id, item.product_id, 1, item.is_member)
+          if (item.is_manual) {
+            await api.addManualToTab(tab.id, item.unit_price_pence)
+          } else {
+            await api.addItem(tab.id, item.product_id, 1, item.is_member)
+          }
         }
         await api.closeTab(tab.id, payMethod)
         qs.clear()
@@ -157,6 +222,8 @@ export default function POS() {
       }
       setShowClose(false)
       await loadBase()
+    } catch (e) {
+      setSettleError(e.message || 'Payment failed — please try again')
     } finally { setSettling(false) }
   }
 
@@ -179,8 +246,9 @@ export default function POS() {
         </div>
         <div className="pos-products">
           {visibleProducts.map(p => {
-            const activePrice = (isMember && p.member_price_pence != null) ? p.member_price_pence : p.price_pence
-            const hasMemberPrice = p.member_price_pence != null
+            const effectiveIsMember = features.memberPricing && isMember
+            const activePrice = (effectiveIsMember && p.member_price_pence != null) ? p.member_price_pence : p.price_pence
+            const hasMemberPrice = features.memberPricing && p.member_price_pence != null
             return (
               <button
                 key={p.id}
@@ -190,12 +258,13 @@ export default function POS() {
               >
                 <span className="product-name">{p.name}</span>
                 <span className="product-price">{fmt(activePrice)}</span>
-                {isMember && hasMemberPrice && (
+                {p.off_book ? (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--accent)' }}>open cash</span>
+                ) : effectiveIsMember && hasMemberPrice ? (
                   <span style={{ fontSize: '0.7rem', color: 'var(--success)' }}>member price</span>
-                )}
-                {!isMember && hasMemberPrice && (
+                ) : !effectiveIsMember && hasMemberPrice ? (
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>mbr: {fmt(p.member_price_pence)}</span>
-                )}
+                ) : null}
                 {p.min_stock > 0 && (
                   <span className={`product-stock${p.stock_qty <= p.min_stock ? ' warn' : ''}`}>
                     Stock: {p.stock_qty}
@@ -226,19 +295,26 @@ export default function POS() {
               onClick={() => setMode('tab')}
             >Tab</button>
           </div>
-          <button
-            className={`btn btn-sm ${isMember ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => {
-              const next = !isMember
-              setIsMember(next)
-              if (mode === 'quick') {
-                qs.reprice(products, next)
-              } else if (activeTabId) {
-                api.repriceTab(activeTabId, next).then(() => loadTab(activeTabId))
-              }
-            }}
-            style={{ width: '100%' }}
-          >{isMember ? '★ Member pricing active' : '☆ Non-member pricing'}</button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {features.memberPricing && (
+              <button
+                className={`btn btn-sm ${isMember ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1 }}
+                onClick={() => {
+                  const next = !isMember
+                  setIsMember(next)
+                  if (mode === 'quick') {
+                    qs.reprice(products, next)
+                  } else if (activeTabId) {
+                    api.repriceTab(activeTabId, next).then(() => loadTab(activeTabId))
+                  }
+                }}
+              >{isMember ? '★ Member' : '☆ Member'}</button>
+            )}
+            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={openManual}>
+              £ Manual
+            </button>
+          </div>
 
           {mode === 'tab' && (
             <div style={{ display: 'flex', gap: 8 }}>
@@ -284,7 +360,7 @@ export default function POS() {
                 <button
                   className="btn btn-success btn-lg"
                   style={{ flex: 1 }}
-                  onClick={() => setShowClose(true)}
+                  onClick={() => { setSettleError(''); setShowClose(true) }}
                   disabled={!canSettle}
                 >Charge {fmt(qs.total)}</button>
               </div>
@@ -320,7 +396,7 @@ export default function POS() {
                   <button
                     className="btn btn-success btn-lg"
                     style={{ flex: 1 }}
-                    onClick={() => setShowClose(true)}
+                    onClick={() => { setSettleError(''); setShowClose(true) }}
                     disabled={!canSettle}
                   >Settle {fmt(tabDetail.total_pence)}</button>
                 </div>
@@ -361,6 +437,11 @@ export default function POS() {
           <div className="modal">
             <div className="modal-title">{mode === 'quick' ? 'Quick Sale' : `Settle: ${settleLabel}`}</div>
             <div style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 20 }}>{fmt(settleTotal)}</div>
+            {settleError && (
+              <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: 12, padding: '8px 12px', background: 'rgba(239,68,68,.1)', borderRadius: 8 }}>
+                {settleError}
+              </div>
+            )}
             <div className="field">
               <label>Payment method</label>
               <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
@@ -378,6 +459,38 @@ export default function POS() {
               <button className="btn btn-secondary" onClick={() => setShowClose(false)} disabled={settling}>Cancel</button>
               <button className="btn btn-success" onClick={settle} disabled={settling}>
                 {settling ? 'Processing...' : 'Confirm payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Manual amount modal */}
+      {showManual && (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && setShowManual(false)}>
+          <div className="modal">
+            <div className="modal-title">Manual amount — Open Cash</div>
+            <div className="field">
+              <label>Amount (£)</label>
+              <input
+                autoFocus
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={manualInput}
+                onChange={e => setManualInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmManual()}
+                placeholder="0.00"
+                style={{ fontSize: '1.5rem', textAlign: 'right' }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowManual(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={confirmManual}
+                disabled={!manualInput || parseFloat(manualInput) <= 0}
+              >
+                Add {manualInput && parseFloat(manualInput) > 0 ? fmt(Math.round(parseFloat(manualInput) * 100)) : ''}
               </button>
             </div>
           </div>
