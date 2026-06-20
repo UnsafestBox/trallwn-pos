@@ -102,6 +102,8 @@ export default function POS() {
   const [settling, setSettling] = useState(false)
   const [settleError, setSettleError] = useState('')
   const [isMember, setIsMember] = useState(false)
+  const [tenderedPence, setTenderedPence] = useState(null)
+  const [tenderedInput, setTenderedInput] = useState('')
 
   // Manual amount entry
   const [showManual, setShowManual] = useState(false)
@@ -360,7 +362,7 @@ export default function POS() {
                 <button
                   className="btn btn-success btn-lg"
                   style={{ flex: 1 }}
-                  onClick={() => { setSettleError(''); setShowClose(true) }}
+                  onClick={() => { setSettleError(''); setTenderedPence(null); setTenderedInput(''); setShowClose(true) }}
                   disabled={!canSettle}
                 >Charge {fmt(qs.total)}</button>
               </div>
@@ -450,11 +452,64 @@ export default function POS() {
                     key={m}
                     className={`btn btn-lg ${payMethod === m ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1 }}
-                    onClick={() => setPayMethod(m)}
+                    onClick={() => { setPayMethod(m); setTenderedPence(null); setTenderedInput('') }}
                   >{m.charAt(0).toUpperCase() + m.slice(1)}</button>
                 ))}
               </div>
             </div>
+            {payMethod === 'cash' && (
+              <div className="field" style={{ marginTop: 4 }}>
+                <label>Cash tendered</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {[500, 1000, 2000, 5000].map(p => (
+                    <button
+                      key={p}
+                      className={`btn btn-sm ${tenderedPence === p ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1 }}
+                      onClick={() => { setTenderedPence(p); setTenderedInput('') }}
+                    >{fmt(p)}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                  <span style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>£</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Other amount"
+                    value={tenderedInput}
+                    onChange={e => {
+                      setTenderedInput(e.target.value)
+                      const v = parseFloat(e.target.value)
+                      setTenderedPence(isNaN(v) || v <= 0 ? null : Math.round(v * 100))
+                    }}
+                  />
+                </div>
+                {tenderedPence !== null && tenderedPence > 0 && (
+                  <div style={{
+                    marginTop: 10, padding: '10px 14px',
+                    background: 'var(--surface2)', borderRadius: 8,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    {tenderedPence >= settleTotal ? (
+                      <>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Change</span>
+                        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--success)' }}>
+                          {fmt(tenderedPence - settleTotal)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Short by</span>
+                        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--danger)' }}>
+                          {fmt(settleTotal - tenderedPence)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowClose(false)} disabled={settling}>Cancel</button>
               <button className="btn btn-success" onClick={settle} disabled={settling}>
