@@ -39,7 +39,7 @@ export default function Login() {
   }
 
   function selectUser(u) {
-    if (!requirePin) {
+    if (!requirePin && u.role !== 'super') {
       doLogin(u.name, '')
     } else {
       setSelectedUser(u)

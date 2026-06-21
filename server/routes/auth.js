@@ -8,7 +8,7 @@ const router = express.Router()
 
 // Public — list active users by name for the login screen
 router.get('/users', (_req, res) => {
-  const users = db.prepare('SELECT id, name FROM users WHERE active = 1 ORDER BY name').all()
+  const users = db.prepare('SELECT id, name, role FROM users WHERE active = 1 ORDER BY name').all()
   res.json(users)
 })
 
@@ -23,7 +23,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Incorrect name or PIN' })
   }
 
-  if (config.auth.requirePin) {
+  if (config.auth.requirePin || user.role === 'super') {
     if (!pin) return res.status(400).json({ error: 'pin required' })
     if (user.pin_hash !== hashPin(pin)) {
       logEvent({ type: 'login_failed', note: name })
