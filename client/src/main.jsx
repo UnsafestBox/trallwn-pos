@@ -57,7 +57,7 @@ function App() {
           <NavLink to="/" end>POS</NavLink>
           <NavLink to="/tabs">Tabs</NavLink>
           {features.bills && <NavLink to="/bills">Bills</NavLink>}
-          {features.reports && <NavLink to="/reports">Reports</NavLink>}
+          {user.role === 'super' && features.reports && <NavLink to="/reports">Reports</NavLink>}
           {user.role === 'super' && features.stockManagement && <NavLink to="/stock">Stock</NavLink>}
           {user.role === 'super' && features.eventLog && <NavLink to="/log">Log</NavLink>}
           {user.role === 'super' && <NavLink to="/users">Users</NavLink>}
@@ -71,7 +71,7 @@ function App() {
             <Route path="/" element={<POS />} />
             <Route path="/tabs" element={<Tabs />} />
             {features.bills && <Route path="/bills" element={<Bills />} />}
-            {features.reports && <Route path="/reports" element={<Reports />} />}
+            {features.reports && <Route path="/reports" element={<SuperOnly><Reports /></SuperOnly>} />}
             {features.stockManagement && <Route path="/stock" element={<SuperOnly><Stock /></SuperOnly>} />}
             {features.eventLog && <Route path="/log" element={<SuperOnly><Log /></SuperOnly>} />}
             <Route path="/users" element={<SuperOnly><Users /></SuperOnly>} />
